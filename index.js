@@ -28,13 +28,81 @@ const client = new MongoClient(uri, {
   },
 });
 
+// 🔐 Verify Firebase Token Middleware
+const verifyFirebaseToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).send({ success: false, message: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error("❌ Firebase token verification failed:", error);
+    return res.status(403).send({ success: false, message: "Forbidden" });
+  }
+};
+
 async function run() {
   try {
     await client.connect();
     const db = client.db("habit-db");
     const habitsCollection = db.collection("habits");
+    const usersCollection = db.collection("users");
 
     console.log("✅ Connected to MongoDB");
+
+    // ========================
+    // 👤 USER ROUTES
+    // ========================
+
+    /** 🔹 Save or update user info */
+    app.post("/users", verifyFirebaseToken, async (req, res) => {
+      try {
+        const { email, name, picture } = req.user;
+        const userData = {
+          email,
+          name: name || req.body.name || "",
+          photoURL: picture || req.body.photoURL || "",
+          lastLogin: new Date(),
+        };
+
+        const existingUser = await usersCollection.findOne({ email });
+        let result;
+
+        if (existingUser) {
+          result = await usersCollection.updateOne(
+            { email },
+            { $set: userData }
+          );
+        } else {
+          userData.createdAt = new Date();
+          result = await usersCollection.insertOne(userData);
+        }
+
+        res.send({ success: true, message: "User saved successfully", result });
+      } catch (error) {
+        console.error("❌ Error saving user:", error);
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to save user" });
+      }
+    });
+
+    /** 🔹 Get current user info */
+    app.get("/users/me", verifyFirebaseToken, async (req, res) => {
+      try {
+        const user = await usersCollection.findOne({ email: req.user.email });
+        res.send(user);
+      } catch (error) {
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to fetch user" });
+      }
+    });
 
     // ========================
     // 📜 HABIT ROUTES
