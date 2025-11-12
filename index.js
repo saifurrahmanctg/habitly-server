@@ -2,9 +2,17 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config({ path: ".env.local" });
+const admin = require("firebase-admin");
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// 🔐 Firebase Admin Initialization
+const serviceAccount = require("./habitly-client-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // 🧩 Middleware
 app.use(cors());
@@ -25,7 +33,6 @@ async function run() {
     await client.connect();
     const db = client.db("habit-db");
     const habitsCollection = db.collection("habits");
-    const usersCollection = db.collection("users");
 
     console.log("✅ Connected to MongoDB");
 
@@ -81,7 +88,7 @@ async function run() {
     });
 
     /** 🔹 Add new habit (requires authentication) */
-    app.post("/habits", async (req, res) => {
+    app.post("/habits", verifyFirebaseToken, async (req, res) => {
       try {
         const newHabit = {
           ...req.body,
@@ -107,7 +114,7 @@ async function run() {
     });
 
     /** 🔹 Update habit (only by owner) */
-    app.put("/habits/:id", async (req, res) => {
+    app.put("/habits/:id", verifyFirebaseToken, async (req, res) => {
       try {
         const { id } = req.params;
         const updatedData = req.body;
@@ -220,7 +227,7 @@ async function run() {
     });
 
     /** 🔹 Delete habit (only by owner) */
-    app.delete("/habits/:id", async (req, res) => {
+    app.delete("/habits/:id", verifyFirebaseToken, async (req, res) => {
       try {
         const { id } = req.params;
 
