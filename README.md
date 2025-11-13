@@ -34,32 +34,6 @@ This is the **backend (server-side)** for the Habit Tracker web application — 
 
 ---
 
-## 📂 Folder Structure
-
-server/
-│
-├── config/
-│ ├── db.js # MongoDB connection setup
-│ └── firebaseAdmin.js # Firebase Admin SDK initialization
-│
-├── routes/
-│ ├── habitRoutes.js # Habit-related CRUD API endpoints
-│ └── userRoutes.js # User listing and profile routes
-│
-├── controllers/
-│ ├── habitController.js # Logic for habit creation, progress, streaks
-│ └── userController.js # Handles Firebase users + custom profile info
-│
-├── models/
-│ ├── Habit.js # Mongoose schema for habits
-│ └── User.js # Optional custom user schema
-│
-├── .env # Environment variables
-├── server.js # Express app entry point
-└── package.json # Dependencies and scripts
-
----
-
 ## ⚙️ Installation & Setup
 
 ### 1️⃣ Clone the repository
