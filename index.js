@@ -8,7 +8,12 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // 🔐 Firebase Admin Initialization
-const serviceAccount = require("./habitly-client-firebase-adminsdk.json");
+// index.js
+const decoded = Buffer.from(
+  process.env.FIREBASE_SERVICE_KEY,
+  "base64"
+).toString("utf8");
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -48,71 +53,17 @@ const verifyFirebaseToken = async (req, res, next) => {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("habit-db");
     const habitsCollection = db.collection("habits");
-    const usersCollection = db.collection("users");
 
     console.log("✅ Connected to MongoDB");
-
-    // ========================
-    // 👤 USER ROUTES
-    // ========================
-
-    /** 🔹 Save or update user info */
-    app.post("/users", verifyFirebaseToken, async (req, res) => {
-      try {
-        const { email, name, picture } = req.user;
-        const userData = {
-          email,
-          name: name || req.body.name || "",
-          photoURL: picture || req.body.photoURL || "",
-          lastLogin: new Date(),
-        };
-
-        const existingUser = await usersCollection.findOne({ email });
-        let result;
-
-        if (existingUser) {
-          result = await usersCollection.updateOne(
-            { email },
-            { $set: userData }
-          );
-        } else {
-          userData.createdAt = new Date();
-          result = await usersCollection.insertOne(userData);
-        }
-
-        res.send({ success: true, message: "User saved successfully", result });
-      } catch (error) {
-        console.error("❌ Error saving user:", error);
-        res
-          .status(500)
-          .send({ success: false, message: "Failed to save user" });
-      }
-    });
-
-    /** 🔹 Get current user info */
-    app.get("/users/me", verifyFirebaseToken, async (req, res) => {
-      try {
-        const user = await usersCollection.findOne({ email: req.user.email });
-        res.send(user);
-      } catch (error) {
-        res
-          .status(500)
-          .send({ success: false, message: "Failed to fetch user" });
-      }
-    });
-
-    // ========================
-    // 📜 HABIT ROUTES
-    // ========================
 
     /** 🔹 Get all habits (public or user-specific) */
     app.get("/habits", async (req, res) => {
       try {
         const { userEmail, sort = "desc", limit } = req.query;
-        const filter = userEmail ? { userEmail } : {}; // show all if no userEmail
+        const filter = userEmail ? { userEmail } : {};
         const sortOrder = sort === "asc" ? 1 : -1;
         const limitNum = limit ? parseInt(limit) : 0;
 
@@ -239,7 +190,7 @@ async function run() {
     });
 
     /** 🔹 Update specific user's progress in a habit */
-    app.patch("/habits/:id/progress", async (req, res) => {
+    app.patch("/habits/:id/progress", verifyFirebaseToken, async (req, res) => {
       try {
         const { id } = req.params;
         const { userEmail, completionHistory, streak, progress } = req.body;
@@ -338,6 +289,8 @@ async function run() {
     });
   } catch (error) {
     console.error("❌ MongoDB connection failed:", error);
+  } finally {
+    // await client.close();
   }
 }
 

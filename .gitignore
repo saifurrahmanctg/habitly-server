@@ -1,3 +1,4 @@
 node_modules
 .env.local
-habitly-client-firebase-adminsdk.json
+firebase-adminsdk.json
+.vercel
