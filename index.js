@@ -53,11 +53,146 @@ const verifyFirebaseToken = async (req, res, next) => {
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
     const db = client.db("habit-db");
     const habitsCollection = db.collection("habits");
+    const usersCollection = db.collection("users");
 
     console.log("✅ Connected to MongoDB");
+
+    const { ObjectId } = require("mongodb");
+
+    // ========================
+    // 📌 USER ROUTES
+    // ========================
+
+    // Save user data upon registration
+    app.post("/users", async (req, res) => {
+      try {
+        const user = req.body;
+        if (!user.email || !user.name) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Name and email are required" });
+        }
+
+        const existing = await usersCollection.findOne({ email: user.email });
+
+        if (existing) {
+          // ✅ Instead of returning 409, just return the existing user
+          return res.send({
+            success: true,
+            message: "User already exists",
+            user: existing,
+          });
+        }
+
+        const result = await usersCollection.insertOne({
+          ...user,
+          role: user.role || "user",
+          createdAt: new Date(),
+        });
+
+        res.status(201).send({
+          success: true,
+          message: "User created successfully",
+          userId: result.insertedId,
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+
+    // Get all users (requires verified token)
+    app.get("/users", async (req, res) => {
+      try {
+        const result = await usersCollection.find().toArray();
+        res.send({ success: true, users: result });
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+
+    // Get a single user by email
+    app.get("/users/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const user = await usersCollection.findOne({ email });
+
+        if (!user) {
+          return res
+            .status(404)
+            .send({ success: false, message: "User not found" });
+        }
+
+        res.send({ success: true, user });
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+
+    // Update user role
+    app.patch("/users/role/:email", verifyFirebaseToken, async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { role } = req.body;
+
+        if (!role) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Role is required" });
+        }
+
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: { role } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "User not found" });
+        }
+
+        res.send({ success: true, message: "Role updated successfully" });
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+
+    // Delete / suspend a user by ID
+    app.delete("/users/:id/suspend", verifyFirebaseToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { reason, feedback } = req.body;
+
+        const result = await usersCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "User not found" });
+        }
+
+        // Optional: log reason & feedback somewhere (audit collection)
+        // await auditCollection.insertOne({ userId: id, reason, feedback, date: new Date() });
+
+        res.send({
+          success: true,
+          message: "User suspended & deleted successfully",
+          reason,
+          feedback,
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+
+    // ========================
+    // 📜 HABIT ROUTES
+    // ========================
 
     /** 🔹 Get all habits (public or user-specific) */
     app.get("/habits", async (req, res) => {
